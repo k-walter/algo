@@ -7,7 +7,7 @@ My goal is to
 ## CS4231 Parallel & Distributed Algorithms
 
 ### Mutual Exclusion
-- [ ] Mutex Trait
+- [x] Mutex Trait
 - [ ] Semaphore Trait
 - [ ] Peterson's Algorithm
 - [ ] Lamport's Bakery
