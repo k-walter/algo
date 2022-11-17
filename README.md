@@ -5,13 +5,16 @@ My goal is to
 - Practice TDD
 
 ### Synchronization
+Just to be clear, you should use rust's synchronization primitives. The implementation of these algorithms require
+atomic support from the architecture.
 - [x] [Mutex Trait](src/sync/mod.rs)
-- [x] [Peterson's Algorithm](src/sync/peterson.rs)
-- [x] [Lamport's Bakery](src/sync/lamports_bakery.rs)
+- [x] [Peterson's Algorithm](src/sync/peterson.rs) for starvation-free binary mutual exclusion
+- [x] [Lamport's Bakery](src/sync/lamports_bakery.rs) for starvation-free n-ary mutual exclusion (with `O(n)` time and space)
 
 ## TODO
 ### CS4231 Parallel & Distributed Algorithms
 #### Causal Ordering
+- [ ] [Happens Before Trait](src/order/mod.rs)
 - [ ] Lamport's Logical Clock
 - [ ] Vector Clock
 - [ ] Matrix Clock
