@@ -1,3 +1,4 @@
+pub mod lamports_bakery;
 pub mod peterson;
 
 pub trait Mutex {
