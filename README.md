@@ -6,7 +6,7 @@ My goal is to
 
 ### Synchronization
 Just to be clear, you should use rust's synchronization primitives. The implementation of these algorithms require
-atomic support from the architecture.
+your platform's atomic support.
 - [x] [Mutex Trait](src/sync/mod.rs)
 - [x] [Peterson's Algorithm](src/sync/peterson.rs) for starvation-free binary mutual exclusion
 - [x] [Lamport's Bakery](src/sync/lamports_bakery.rs) for starvation-free n-ary mutual exclusion (with `O(n)` time and space)

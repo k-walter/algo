@@ -13,16 +13,15 @@ use std::sync::atomic::Ordering;
 /// use crate::algo::sync::lamports_bakery::{Bakery, BakeryN};
 /// use crate::algo::sync::Mutex;
 /// use std::sync::{
-///     atomic::{AtomicI32, Ordering},
-///     Arc,
+///     atomic::Ordering,
 /// };
 ///
-/// let data = Arc::new(AtomicI32::new(0));
+/// let data = std::sync::Arc::new(std::sync::atomic::AtomicI32::new(0));
 /// let mu = std::sync::Arc::new(Bakery::new(4));
 /// let ths = (0..4)
 ///     .map(|n| {
 ///         let data = data.clone();
-///         let mu = BakeryN::new(n, &mu);
+///         let mut mu = BakeryN::new(n, &mu);
 ///         let n = n as i32 + 1;
 ///         std::thread::spawn(move || {
 ///             for _ in 0..10_000 {
@@ -43,6 +42,7 @@ impl Bakery {
     const ENTER: i32 = -1;
     const FREE: i32 = 0;
     pub fn new(size: usize) -> Self {
+        assert!(size > 1, "Do you really need a mutex of size {size}?");
         Self {
             q_nos: (0..size)
                 .map(|_| std::sync::atomic::AtomicI32::new(Bakery::FREE))
@@ -57,7 +57,10 @@ pub struct BakeryN {
 }
 pub struct BakeryGuard<'a>(&'a BakeryN);
 impl BakeryN {
+    // Does not check if index is taken.
     pub fn new(n: usize, bakery: &std::sync::Arc<Bakery>) -> Self {
+        let size = bakery.q_nos.len();
+        assert!(n < size, "0-based user index {n} >= bakery of size={size}");
         Self {
             n,
             bakery: bakery.clone(),
@@ -98,16 +101,13 @@ mod tests {
         lamports_bakery::{Bakery, BakeryN},
         Mutex,
     };
-    use std::sync::{
-        atomic::{AtomicI32, Ordering},
-        Arc,
-    };
+    use std::sync::atomic::Ordering;
     const N_THREADS: i32 = 4;
     const WORK: i32 = 1_000_000 / N_THREADS;
 
     #[test]
     fn sequential_works() {
-        let data = Arc::new(TestData::default());
+        let data = std::sync::Arc::new(TestData::default());
         for i in 0..N_THREADS {
             for _ in 0..WORK {
                 if i % 2 == 0 {
@@ -123,7 +123,7 @@ mod tests {
 
     #[test]
     fn race_conditions() {
-        let data = Arc::new(TestData::default());
+        let data = std::sync::Arc::new(TestData::default());
         let ths = (0..N_THREADS)
             .map(|i| {
                 let data = data.clone();
@@ -147,8 +147,8 @@ mod tests {
 
     #[test]
     fn mutual_exclusion() {
-        let data = Arc::new(TestData::default());
-        let mu = Arc::new(Bakery::new(N_THREADS as usize));
+        let data = std::sync::Arc::new(TestData::default());
+        let mu = std::sync::Arc::new(Bakery::new(N_THREADS as usize));
         let ths = (0..N_THREADS as usize)
             .map(|n| {
                 let data = data.clone();
@@ -172,7 +172,7 @@ mod tests {
 
     #[test]
     fn no_starvation() {
-        let mu = Arc::new(Bakery::new(N_THREADS as usize));
+        let mu = std::sync::Arc::new(Bakery::new(N_THREADS as usize));
 
         // 0 to n-2 acquire
         let ths = (0..N_THREADS as usize - 1)
@@ -190,7 +190,7 @@ mod tests {
             let mut mu = BakeryN::new(N_THREADS as usize - 1, &mu);
             move || {
                 let _guard_b = mu.acquire();
-                std::thread::sleep(std::time::Duration::from_millis(1000));
+                std::thread::sleep(std::time::Duration::from_millis(2000));
             }
         });
         std::thread::sleep(std::time::Duration::from_millis(100));
@@ -219,7 +219,7 @@ mod tests {
     }
 
     #[derive(Default)]
-    struct TestData(AtomicI32, AtomicI32);
+    struct TestData(std::sync::atomic::AtomicI32, std::sync::atomic::AtomicI32);
     impl TestData {
         // Relaxed since tests only require order within the same variable
         //

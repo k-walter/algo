@@ -12,12 +12,12 @@ use std::sync::atomic::Ordering;
 /// ```
 /// use crate::algo::sync::peterson::{Peterson, PetersonA, PetersonB};
 /// use crate::algo::sync::Mutex;
-/// use std::sync::{ Arc, atomic::{AtomicI32, Ordering}};
+/// use std::sync::atomic::Ordering;
 ///
-/// let mu = Arc::new(Peterson::default());
-/// let mut val = Arc::new(AtomicI32::new(0));
+/// let mu = std::sync::Arc::new(Peterson::default());
+/// let mut val = std::sync::Arc::new(std::sync::atomic::AtomicI32::new(0));
 /// let th_a = std::thread::spawn({
-///     let mu_a = PetersonA::new(&mu);
+///     let mut mu_a = PetersonA::new(&mu);
 ///     let val_a = val.clone();
 ///     move || {
 ///         let _guard_a = mu_a.acquire();
@@ -26,7 +26,7 @@ use std::sync::atomic::Ordering;
 ///     }
 /// });
 /// let th_b = std::thread::spawn({
-///     let mu_b = PetersonB::new(&mu);
+///     let mut mu_b = PetersonB::new(&mu);
 ///     let val_b = val.clone();
 ///     move || {
 ///         let _guard_b = mu_b.acquire();
@@ -97,19 +97,12 @@ mod tests {
         peterson::{Peterson, PetersonA, PetersonB},
         Mutex,
     };
-    use core::time;
-    use std::{
-        sync::{
-            atomic::{AtomicI32, Ordering},
-            Arc,
-        },
-        thread::{self},
-    };
+    use std::sync::atomic::Ordering;
     const WORK: i32 = 10_000_000 / 2;
 
     #[test]
     fn sequential_works() {
-        let data = Arc::new(TestData::default());
+        let data = std::sync::Arc::new(TestData::default());
         for _ in 0..WORK {
             data.add_then_sub();
         }
@@ -122,8 +115,8 @@ mod tests {
 
     #[test]
     fn race_conditions() {
-        let data = Arc::new(TestData::default());
-        let th_a = thread::spawn({
+        let data = std::sync::Arc::new(TestData::default());
+        let th_a = std::thread::spawn({
             let data = data.clone();
             move || {
                 for _ in 0..WORK {
@@ -131,7 +124,7 @@ mod tests {
                 }
             }
         });
-        let th_b = thread::spawn({
+        let th_b = std::thread::spawn({
             let data = data.clone();
             move || {
                 for _ in 0..WORK {
@@ -149,9 +142,9 @@ mod tests {
 
     #[test]
     fn mutual_exclusion() {
-        let mu = Arc::new(Peterson::default());
-        let data = Arc::new(TestData::default());
-        let th_a = thread::spawn({
+        let mu = std::sync::Arc::new(Peterson::default());
+        let data = std::sync::Arc::new(TestData::default());
+        let th_a = std::thread::spawn({
             let data = data.clone();
             let mut mu = PetersonA::new(&mu);
             move || {
@@ -161,7 +154,7 @@ mod tests {
                 }
             }
         });
-        let th_b = thread::spawn({
+        let th_b = std::thread::spawn({
             let data = data.clone();
             let mut mu = PetersonB::new(&mu);
             move || {
@@ -179,29 +172,29 @@ mod tests {
 
     #[test]
     fn no_starvation() {
-        let mu = Arc::new(Peterson::default());
+        let mu = std::sync::Arc::new(Peterson::default());
 
         // A acquires
         let mut mu_a = PetersonA::new(&mu);
         let _guard_a = mu_a.acquire();
 
         // B blocks
-        let th_b = thread::spawn({
+        let th_b = std::thread::spawn({
             let mut mu_b = PetersonB::new(&mu);
             move || {
                 let _guard_b = mu_b.acquire();
-                thread::sleep(time::Duration::from_millis(500));
+                std::thread::sleep(std::time::Duration::from_millis(500));
             }
         });
-        thread::sleep(time::Duration::from_millis(500));
+        std::thread::sleep(std::time::Duration::from_millis(500));
         assert!(!th_b.is_finished());
 
         // A release and acquire, then blocks so that B doesn't starve
         drop(_guard_a);
-        let th_a = thread::spawn({
+        let th_a = std::thread::spawn({
             move || {
                 let _guard_a = mu_a.acquire();
-                thread::sleep(time::Duration::from_millis(500));
+                std::thread::sleep(std::time::Duration::from_millis(500));
             }
         });
 
@@ -212,7 +205,7 @@ mod tests {
     }
 
     #[derive(Default)]
-    struct TestData(AtomicI32, AtomicI32);
+    struct TestData(std::sync::atomic::AtomicI32, std::sync::atomic::AtomicI32);
     impl TestData {
         // Relaxed since tests only require order within the same variable
         //
