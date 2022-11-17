@@ -137,7 +137,50 @@ mod tests {
 
     #[test]
     fn no_starvation() {
-        todo!()
+        let mu = Arc::new(Bakery::new(N_THREADS as usize));
+
+        // 0 to n-2 acquire
+        let ths = (0..N_THREADS as usize - 1)
+            .map(|n| {
+                let mu = BakeryN::new(n, &mu);
+                std::thread::spawn(move || {
+                    let _guard = mu.acquire();
+                    std::thread::sleep(std::time::Duration::from_millis(100));
+                })
+            })
+            .collect::<Vec<_>>();
+
+        // n-1 th blocks
+        let th = std::thread::spawn({
+            let mu = BakeryN::new(N_THREADS as usize - 1, &mu);
+            move || {
+                let _guard_b = mu.acquire();
+                std::thread::sleep(std::time::Duration::from_millis(1000));
+            }
+        });
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        assert!(!th.is_finished());
+
+        // 0 to n-2 release and acquire but block, because n-1 acquires
+        let ths = ths
+            .into_iter()
+            .enumerate()
+            .map(|(n, th)| {
+                let mu = BakeryN::new(n, &mu);
+                th.join().unwrap();
+                std::thread::spawn(move || {
+                    let _guard = mu.acquire();
+                    std::thread::sleep(std::time::Duration::from_millis(100));
+                })
+            })
+            .collect::<Vec<_>>();
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        assert!(ths.iter().all(|th| !th.is_finished()));
+
+        // n-1 releases, then rest acquire
+        th.join().unwrap();
+        assert!(ths.iter().all(|th| !th.is_finished()));
+        ths.into_iter().for_each(|th| th.join().unwrap());
     }
 
     #[derive(Default)]
