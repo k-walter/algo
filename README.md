@@ -9,7 +9,7 @@ My goal is to
 ### Mutual Exclusion
 - [x] Mutex Trait
 - [ ] Semaphore Trait
-- [ ] Peterson's Algorithm
+- [x] Peterson's Algorithm
 - [ ] Lamport's Bakery
 - [ ] Wait-For Graph
 
