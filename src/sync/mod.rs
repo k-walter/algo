@@ -1,23 +1,13 @@
 pub mod lamports_bakery;
 pub mod peterson;
 
-pub trait Mutex {
-    type Output: Mutex; // usually Self
-    fn acquire(&self) -> MutexGuard<Self::Output>;
-    fn release(&self);
-}
-
-pub struct MutexGuard<'a, T>
+// Mutex lives longer than guard, because guard releases mutex
+pub trait Mutex<'a, Guard: 'a>
 where
-    T: Mutex,
+    // Only allow releasing after acquiring guard
+    // drop(&mut) guarantees release once at compile time
+    Guard: Drop,
 {
-    mutex: &'a T,
-}
-impl<T> Drop for MutexGuard<'_, T>
-where
-    T: Mutex,
-{
-    fn drop(&mut self) {
-        self.mutex.release()
-    }
+    // &mut guarantees acquire once within the same or narrower scope at compile time
+    fn acquire(&'a mut self) -> Guard;
 }

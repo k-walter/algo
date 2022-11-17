@@ -1,9 +1,5 @@
-use std::sync::{
-    atomic::{AtomicI32, Ordering},
-    Arc,
-};
-
 use super::Mutex;
+use std::sync::atomic::Ordering;
 
 /// N-ary mutex to protect critical section fairly.
 ///
@@ -41,33 +37,35 @@ use super::Mutex;
 /// assert_eq!(data.load(Ordering::Relaxed), 10_000 * (1 + 2 + 3 + 4));
 /// ```
 pub struct Bakery {
-    q_nos: Vec<AtomicI32>,
+    q_nos: Vec<std::sync::atomic::AtomicI32>,
 }
 impl Bakery {
     const ENTER: i32 = -1;
     const FREE: i32 = 0;
     pub fn new(size: usize) -> Self {
         Self {
-            q_nos: (0..size).map(|_| AtomicI32::new(Bakery::FREE)).collect(),
+            q_nos: (0..size)
+                .map(|_| std::sync::atomic::AtomicI32::new(Bakery::FREE))
+                .collect(),
         }
     }
 }
 
 pub struct BakeryN {
     n: usize,
-    bakery: Arc<Bakery>,
+    bakery: std::sync::Arc<Bakery>,
 }
+pub struct BakeryGuard<'a>(&'a BakeryN);
 impl BakeryN {
-    pub fn new(n: usize, bakery: &Arc<Bakery>) -> Self {
+    pub fn new(n: usize, bakery: &std::sync::Arc<Bakery>) -> Self {
         Self {
             n,
             bakery: bakery.clone(),
         }
     }
 }
-impl Mutex for BakeryN {
-    type Output = Self;
-    fn acquire(&self) -> super::MutexGuard<Self::Output> {
+impl<'a> Mutex<'a, BakeryGuard<'a>> for BakeryN {
+    fn acquire(&'a mut self) -> BakeryGuard<'a> {
         // Optimization: entering the queue is -1, which is fine since -1 < all +ve queue numbers
         self.bakery.q_nos[self.n].store(Bakery::ENTER, Ordering::SeqCst);
         let q_no = 1 + self
@@ -85,10 +83,12 @@ impl Mutex for BakeryN {
             }
         }
 
-        super::MutexGuard { mutex: self }
+        BakeryGuard(self)
     }
-    fn release(&self) {
-        self.bakery.q_nos[self.n].store(Bakery::FREE, Ordering::SeqCst);
+}
+impl Drop for BakeryGuard<'_> {
+    fn drop(&mut self) {
+        self.0.bakery.q_nos[self.0.n].store(Bakery::FREE, Ordering::SeqCst);
     }
 }
 
@@ -152,7 +152,7 @@ mod tests {
         let ths = (0..N_THREADS as usize)
             .map(|n| {
                 let data = data.clone();
-                let mu = BakeryN::new(n, &mu);
+                let mut mu = BakeryN::new(n, &mu);
                 std::thread::spawn(move || {
                     for _ in 0..WORK {
                         let _guard = mu.acquire();
@@ -177,7 +177,7 @@ mod tests {
         // 0 to n-2 acquire
         let ths = (0..N_THREADS as usize - 1)
             .map(|n| {
-                let mu = BakeryN::new(n, &mu);
+                let mut mu = BakeryN::new(n, &mu);
                 std::thread::spawn(move || {
                     let _guard = mu.acquire();
                     std::thread::sleep(std::time::Duration::from_millis(100));
@@ -187,7 +187,7 @@ mod tests {
 
         // n-1 th blocks
         let th = std::thread::spawn({
-            let mu = BakeryN::new(N_THREADS as usize - 1, &mu);
+            let mut mu = BakeryN::new(N_THREADS as usize - 1, &mu);
             move || {
                 let _guard_b = mu.acquire();
                 std::thread::sleep(std::time::Duration::from_millis(1000));
@@ -201,7 +201,7 @@ mod tests {
             .into_iter()
             .enumerate()
             .map(|(n, th)| {
-                let mu = BakeryN::new(n, &mu);
+                let mut mu = BakeryN::new(n, &mu);
                 th.join().unwrap();
                 std::thread::spawn(move || {
                     let _guard = mu.acquire();

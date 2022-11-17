@@ -1,8 +1,5 @@
-use super::{Mutex, MutexGuard};
-use std::sync::{
-    atomic::{AtomicBool, Ordering},
-    Arc,
-};
+use super::Mutex;
+use std::sync::atomic::Ordering;
 
 /// Binary mutex to protect critical section fairly.
 ///
@@ -43,50 +40,54 @@ use std::sync::{
 /// ```
 #[derive(Default)]
 pub struct Peterson {
-    a_wants: AtomicBool,
-    b_wants: AtomicBool,
-    a_turn: AtomicBool,
+    a_wants: std::sync::atomic::AtomicBool,
+    b_wants: std::sync::atomic::AtomicBool,
+    a_turn: std::sync::atomic::AtomicBool,
 }
-pub struct PetersonA(Arc<Peterson>);
-pub struct PetersonB(Arc<Peterson>);
+pub struct PetersonA(std::sync::Arc<Peterson>);
+pub struct PetersonB(std::sync::Arc<Peterson>);
+pub struct PetersonAGuard<'a>(&'a PetersonA);
+pub struct PetersonBGuard<'a>(&'a PetersonB);
 
 impl PetersonA {
-    pub fn new(p: &Arc<Peterson>) -> Self {
+    pub fn new(p: &std::sync::Arc<Peterson>) -> Self {
         Self(p.clone())
     }
 }
 impl PetersonB {
-    pub fn new(p: &Arc<Peterson>) -> Self {
+    pub fn new(p: &std::sync::Arc<Peterson>) -> Self {
         Self(p.clone())
     }
 }
-impl Mutex for PetersonA {
-    type Output = Self;
-    fn acquire(&self) -> MutexGuard<Self::Output> {
+impl<'a> Mutex<'a, PetersonAGuard<'a>> for PetersonA {
+    fn acquire(&'a mut self) -> PetersonAGuard<'a> {
         // Algorithm requires no reordering of variables, hence SeqCst
         self.0.a_wants.store(true, Ordering::SeqCst);
         self.0.a_turn.store(false, Ordering::SeqCst);
         while self.0.b_wants.load(Ordering::SeqCst) && !self.0.a_turn.load(Ordering::SeqCst) {
             std::hint::spin_loop()
         }
-        MutexGuard { mutex: self }
-    }
-    fn release(&self) {
-        self.0.a_wants.store(false, Ordering::SeqCst)
+        PetersonAGuard(self)
     }
 }
-impl Mutex for PetersonB {
-    type Output = Self;
-    fn acquire(&self) -> MutexGuard<Self::Output> {
+impl Drop for PetersonAGuard<'_> {
+    fn drop(&mut self) {
+        self.0 .0.a_wants.store(false, Ordering::SeqCst)
+    }
+}
+impl<'a> Mutex<'a, PetersonBGuard<'a>> for PetersonB {
+    fn acquire(&'a mut self) -> PetersonBGuard<'a> {
         self.0.b_wants.store(true, Ordering::SeqCst);
         self.0.a_turn.store(true, Ordering::SeqCst);
         while self.0.a_wants.load(Ordering::SeqCst) && self.0.a_turn.load(Ordering::SeqCst) {
             std::hint::spin_loop()
         }
-        MutexGuard { mutex: self }
+        PetersonBGuard(self)
     }
-    fn release(&self) {
-        self.0.b_wants.store(false, Ordering::SeqCst)
+}
+impl Drop for PetersonBGuard<'_> {
+    fn drop(&mut self) {
+        self.0 .0.b_wants.store(false, Ordering::SeqCst)
     }
 }
 
@@ -152,7 +153,7 @@ mod tests {
         let data = Arc::new(TestData::default());
         let th_a = thread::spawn({
             let data = data.clone();
-            let mu = PetersonA::new(&mu);
+            let mut mu = PetersonA::new(&mu);
             move || {
                 for _ in 0..WORK {
                     let _guard = mu.acquire();
@@ -162,7 +163,7 @@ mod tests {
         });
         let th_b = thread::spawn({
             let data = data.clone();
-            let mu = PetersonB::new(&mu);
+            let mut mu = PetersonB::new(&mu);
             move || {
                 for _ in 0..WORK {
                     let _guard = mu.acquire();
@@ -181,12 +182,12 @@ mod tests {
         let mu = Arc::new(Peterson::default());
 
         // A acquires
-        let mu_a = PetersonA::new(&mu);
+        let mut mu_a = PetersonA::new(&mu);
         let _guard_a = mu_a.acquire();
 
         // B blocks
         let th_b = thread::spawn({
-            let mu_b = PetersonB::new(&mu);
+            let mut mu_b = PetersonB::new(&mu);
             move || {
                 let _guard_b = mu_b.acquire();
                 thread::sleep(time::Duration::from_millis(500));
