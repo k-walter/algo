@@ -1,19 +1,19 @@
 use std::sync::{
-    atomic::{AtomicBool, AtomicU32, Ordering},
+    atomic::{AtomicI32, Ordering},
     Arc,
 };
 
 use super::Mutex;
 
 pub struct Bakery {
-    getting_no: Vec<AtomicBool>,
-    q_no: Vec<AtomicU32>,
+    q_nos: Vec<AtomicI32>,
 }
 impl Bakery {
-    pub fn new(n: usize) -> Self {
+    const ENTER: i32 = -1;
+    const FREE: i32 = 0;
+    pub fn new(size: usize) -> Self {
         Self {
-            getting_no: (0..n).map(|_| AtomicBool::new(false)).collect(),
-            q_no: (0..n).map(|_| AtomicU32::new(0)).collect(),
+            q_nos: (0..size).map(|_| AtomicI32::new(Bakery::FREE)).collect(),
         }
     }
 }
@@ -33,22 +33,18 @@ impl BakeryN {
 impl Mutex for BakeryN {
     type Output = Self;
     fn acquire(&self) -> super::MutexGuard<Self::Output> {
-        self.bakery.getting_no[self.n].store(true, Ordering::SeqCst);
+        // Optimization: entering the queue is -1, which is fine since -1 < all +ve queue numbers
+        self.bakery.q_nos[self.n].store(Bakery::ENTER, Ordering::SeqCst);
         let q_no = 1 + self
             .bakery
-            .q_no
+            .q_nos
             .iter()
             .fold(0, |acc, i| i.load(Ordering::SeqCst).max(acc));
-        self.bakery.q_no[self.n].store(q_no, Ordering::SeqCst);
-        self.bakery.getting_no[self.n].store(false, Ordering::SeqCst);
+        self.bakery.q_nos[self.n].store(q_no, Ordering::SeqCst);
 
-        for i in 0..self.bakery.q_no.len() {
-            while self.bakery.getting_no[i].load(Ordering::SeqCst) {
-                std::hint::spin_loop()
-            }
-            while self.bakery.q_no[i].load(Ordering::SeqCst) != 0
-                && (q_no > self.bakery.q_no[i].load(Ordering::SeqCst)
-                    || (q_no == self.bakery.q_no[i].load(Ordering::SeqCst) && i < self.n))
+        for (i, other_q_no) in self.bakery.q_nos.iter().enumerate() {
+            while other_q_no.load(Ordering::SeqCst) != Bakery::FREE
+                && (other_q_no.load(Ordering::SeqCst), i) < (q_no, self.n)
             {
                 std::hint::spin_loop()
             }
@@ -57,7 +53,7 @@ impl Mutex for BakeryN {
         super::MutexGuard { mutex: self }
     }
     fn release(&self) {
-        self.bakery.q_no[self.n].store(0, Ordering::SeqCst);
+        self.bakery.q_nos[self.n].store(Bakery::FREE, Ordering::SeqCst);
     }
 }
 
