@@ -13,8 +13,8 @@ use std::sync::{
 ///
 /// # Examples
 /// ```
-/// use self::fearless_rust::sync::peterson::{Peterson, PetersonA, PetersonB};
-/// use self::fearless_rust::sync::Mutex;
+/// use crate::algo::sync::peterson::{Peterson, PetersonA, PetersonB};
+/// use crate::algo::sync::Mutex;
 /// use std::sync::{ Arc, atomic::{AtomicI32, Ordering}};
 ///
 /// let mu = Arc::new(Peterson::default());

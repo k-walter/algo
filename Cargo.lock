@@ -3,5 +3,5 @@
 version = 3
 
 [[package]]
-name = "fearless-rust"
+name = "algo"
 version = "0.1.0"

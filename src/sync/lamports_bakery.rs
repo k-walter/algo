@@ -5,6 +5,41 @@ use std::sync::{
 
 use super::Mutex;
 
+/// N-ary mutex to protect critical section fairly.
+///
+/// 1. Mutual Exclusion - spinlocks on shared variables in the mutex to guarantee only one BakeryN enters.
+/// It is UB for the same BakeryN to `acquire()` multiple times without `release()`.
+/// 2. No Starvation - assuming OS threads eventually runs, BakeryN can never cause BakeryM (N!=M) to fail to `acquire()`
+/// regardless of `acquire()` order.
+///
+/// # Examples
+/// ```
+/// use crate::algo::sync::lamports_bakery::{Bakery, BakeryN};
+/// use crate::algo::sync::Mutex;
+/// use std::sync::{
+///     atomic::{AtomicI32, Ordering},
+///     Arc,
+/// };
+///
+/// let data = Arc::new(AtomicI32::new(0));
+/// let mu = std::sync::Arc::new(Bakery::new(4));
+/// let ths = (0..4)
+///     .map(|n| {
+///         let data = data.clone();
+///         let mu = BakeryN::new(n, &mu);
+///         let n = n as i32 + 1;
+///         std::thread::spawn(move || {
+///             for _ in 0..10_000 {
+///                 let _guard = mu.acquire();
+///                 let i = data.load(Ordering::Relaxed);
+///                 data.store(i + n, Ordering::Relaxed);
+///             }
+///         })
+///     })
+///     .collect::<Vec<_>>();
+/// ths.into_iter().for_each(|th| th.join().unwrap());
+/// assert_eq!(data.load(Ordering::Relaxed), 10_000 * (1 + 2 + 3 + 4));
+/// ```
 pub struct Bakery {
     q_nos: Vec<AtomicI32>,
 }
