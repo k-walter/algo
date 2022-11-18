@@ -14,10 +14,9 @@ use std::sync::atomic::Ordering;
 /// use crate::algo::sync::Mutex;
 /// use std::sync::atomic::Ordering;
 ///
-/// let mu = std::sync::Arc::new(Peterson::default());
+/// let (mut mu_a, mut mu_b) = Peterson::binary_mutex();
 /// let mut val = std::sync::Arc::new(std::sync::atomic::AtomicI32::new(0));
 /// let th_a = std::thread::spawn({
-///     let mut mu_a = PetersonA::new(&mu);
 ///     let val_a = val.clone();
 ///     move || {
 ///         let _guard_a = mu_a.acquire();
@@ -26,7 +25,6 @@ use std::sync::atomic::Ordering;
 ///     }
 /// });
 /// let th_b = std::thread::spawn({
-///     let mut mu_b = PetersonB::new(&mu);
 ///     let val_b = val.clone();
 ///     move || {
 ///         let _guard_b = mu_b.acquire();
@@ -49,14 +47,10 @@ pub struct PetersonB(std::sync::Arc<Peterson>);
 pub struct PetersonAGuard<'a>(&'a PetersonA);
 pub struct PetersonBGuard<'a>(&'a PetersonB);
 
-impl PetersonA {
-    pub fn new(p: &std::sync::Arc<Peterson>) -> Self {
-        Self(p.clone())
-    }
-}
-impl PetersonB {
-    pub fn new(p: &std::sync::Arc<Peterson>) -> Self {
-        Self(p.clone())
+impl Peterson {
+    pub fn binary_mutex() -> (PetersonA, PetersonB) {
+        let p = std::sync::Arc::new(Peterson::default());
+        (PetersonA(p.clone()), PetersonB(p))
     }
 }
 impl<'a> Mutex<'a, PetersonAGuard<'a>> for PetersonA {
@@ -142,24 +136,22 @@ mod tests {
 
     #[test]
     fn mutual_exclusion() {
-        let mu = std::sync::Arc::new(Peterson::default());
+        let (mut mu_a, mut mu_b) = Peterson::binary_mutex();
         let data = std::sync::Arc::new(TestData::default());
         let th_a = std::thread::spawn({
             let data = data.clone();
-            let mut mu = PetersonA::new(&mu);
             move || {
                 for _ in 0..WORK {
-                    let _guard = mu.acquire();
+                    let _guard = mu_a.acquire();
                     data.add_then_sub();
                 }
             }
         });
         let th_b = std::thread::spawn({
             let data = data.clone();
-            let mut mu = PetersonB::new(&mu);
             move || {
                 for _ in 0..WORK {
-                    let _guard = mu.acquire();
+                    let _guard = mu_b.acquire();
                     data.sub_then_add();
                 }
             }
