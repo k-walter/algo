@@ -7,7 +7,6 @@ pub trait LogicalClock: PartialOrd + Clone {
     fn merge(&self, other: &Self) -> Self;
 }
 
-#[derive(Default)]
 pub struct Process<Event: LogicalClock> {
     events: Vec<Event>,
 }

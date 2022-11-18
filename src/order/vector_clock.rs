@@ -41,13 +41,15 @@ impl PartialOrd for VectorClock {
         if self.clk.len() != other.clk.len() {
             return None;
         }
+        use std::cmp::Ordering::{Equal, Greater, Less};
         self.clk
             .iter()
             .zip(&other.clk)
-            .try_fold(std::cmp::Ordering::Equal, |acc, (s, t)| match s.cmp(t) {
-                std::cmp::Ordering::Greater => None,
-                std::cmp::Ordering::Less => Some(std::cmp::Ordering::Less),
-                std::cmp::Ordering::Equal => Some(acc),
+            .try_fold(Equal, |acc, (s, t)| match (acc, s.cmp(t)) {
+                (Less, Greater) | (Greater, Less) => None,
+                (_, Less) | (Less, _) => Some(Less),
+                (_, Greater) | (Greater, _) => Some(Greater),
+                (Equal, Equal) => Some(Equal),
             })
     }
 }
@@ -58,7 +60,8 @@ impl PartialEq for VectorClock {
     }
 }
 
-mod test {
+#[cfg(test)]
+mod tests {
     use crate::order::{vector_clock::VectorClock, LogicalClock, Process};
     use rand::Rng;
 
@@ -68,16 +71,22 @@ mod test {
         assert_eq!(e1.partial_cmp(&e1), Some(std::cmp::Ordering::Equal));
         let e2 = e1.extend();
         assert_eq!(e1.partial_cmp(&e2), Some(std::cmp::Ordering::Less));
+        assert_eq!(e2.partial_cmp(&e1), Some(std::cmp::Ordering::Greater));
         assert_eq!(e2.partial_cmp(&e2), Some(std::cmp::Ordering::Equal));
 
         let f1 = VectorClock::new(1, 2);
         assert_eq!(e1.partial_cmp(&f1), None);
         assert_eq!(e2.partial_cmp(&f1), None);
+        assert_eq!(f1.partial_cmp(&e1), None);
+        assert_eq!(f1.partial_cmp(&e2), None);
         assert_eq!(f1.partial_cmp(&f1), Some(std::cmp::Ordering::Equal));
         let f2 = f1.merge(&e1);
         assert_eq!(e1.partial_cmp(&f2), Some(std::cmp::Ordering::Less));
         assert_eq!(e2.partial_cmp(&f2), None);
         assert_eq!(f1.partial_cmp(&f2), Some(std::cmp::Ordering::Less));
+        assert_eq!(f2.partial_cmp(&e1), Some(std::cmp::Ordering::Greater));
+        assert_eq!(f2.partial_cmp(&e2), None);
+        assert_eq!(f2.partial_cmp(&f1), Some(std::cmp::Ordering::Greater));
         assert_eq!(f2.partial_cmp(&f2), Some(std::cmp::Ordering::Equal));
     }
 
