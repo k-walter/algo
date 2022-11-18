@@ -14,8 +14,8 @@ your platform's atomic support.
 ## TODO
 ### CS4231 Parallel & Distributed Algorithms
 #### Causal Ordering
-- [ ] [Happens Before Trait](src/order/mod.rs)
-- [ ] Lamport's Logical Clock
+- [x] [Logical Clock Trait](src/order/mod.rs)
+- [x] ~~Lamport's Logical Clock~~ not meaningful
 - [ ] Vector Clock
 - [ ] Matrix Clock
 - [ ] Chandy & Lamport's Protocol (Consistent Global Snapshot) 
