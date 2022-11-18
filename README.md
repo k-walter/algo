@@ -16,7 +16,7 @@ your platform's atomic support.
 #### Causal Ordering
 - [x] [Logical Clock Trait](src/order/mod.rs)
 - [x] ~~Lamport's Logical Clock~~ not meaningful
-- [ ] Vector Clock
+- [x] [Vector Clock](src/order/vector_clock.rs) to compare if event s "happens before" event t
 - [ ] Matrix Clock
 - [ ] Chandy & Lamport's Protocol (Consistent Global Snapshot) 
 - [ ] Causal Order Unicast
