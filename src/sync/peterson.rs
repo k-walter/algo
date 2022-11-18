@@ -65,7 +65,7 @@ impl<'a> Mutex<'a, PetersonAGuard<'a>> for PetersonA {
         self.0.a_wants.store(true, Ordering::SeqCst);
         self.0.a_turn.store(false, Ordering::SeqCst);
         while self.0.b_wants.load(Ordering::SeqCst) && !self.0.a_turn.load(Ordering::SeqCst) {
-            std::hint::spin_loop()
+            std::thread::yield_now();
         }
         PetersonAGuard(self)
     }
@@ -80,7 +80,7 @@ impl<'a> Mutex<'a, PetersonBGuard<'a>> for PetersonB {
         self.0.b_wants.store(true, Ordering::SeqCst);
         self.0.a_turn.store(true, Ordering::SeqCst);
         while self.0.a_wants.load(Ordering::SeqCst) && self.0.a_turn.load(Ordering::SeqCst) {
-            std::hint::spin_loop()
+            std::thread::yield_now();
         }
         PetersonBGuard(self)
     }
@@ -172,36 +172,62 @@ mod tests {
 
     #[test]
     fn no_starvation() {
-        let mu = std::sync::Arc::new(Peterson::default());
+        let (mut mu_a, mut mu_b) = Peterson::binary_mutex();
+        // 1. Let p0 acquire first, then p1 blocks
+        let p0_first = std::sync::Arc::new(std::sync::Barrier::new(3));
+        // 2. p0 release and immediately acquires but blocks to p1 who's waiting
+        let p0_release = std::sync::Arc::new(std::sync::Barrier::new(2));
+        // 3. p1 wakes up and acquires the mutex, ie no starvation
+        let p1_acquire = std::sync::Arc::new(std::sync::Barrier::new(2));
+        // 4. p1 releases, allowing p0 to acquire
+        let p1_release = std::sync::Arc::new(std::sync::Barrier::new(2));
+        // 5. p0 wakes up and acquires the mutex
+        let p0_reacquire = std::sync::Arc::new(std::sync::Barrier::new(2));
 
-        // A acquires
-        let mut mu_a = PetersonA::new(&mu);
-        let _guard_a = mu_a.acquire();
-
-        // B blocks
-        let th_b = std::thread::spawn({
-            let mut mu_b = PetersonB::new(&mu);
+        let th0 = {
+            let p0_first = p0_first.clone();
+            let p0_release = p0_release.clone();
+            let p0_reacquire = p0_reacquire.clone();
+            std::thread::spawn(move || {
+                let _guard = mu_a.acquire();
+                println!("p0 first");
+                p0_first.wait(); // (1)
+                p0_release.wait(); // (2)
+                println!("p0 releasing");
+                drop(_guard);
+                let _guard = mu_a.acquire(); // (4)
+                println!("p0 reacquire");
+                p0_reacquire.wait(); // (5)
+            })
+        };
+        let th1 = std::thread::spawn({
+            let p0_first = p0_first.clone();
+            let p1_release = p1_release.clone();
+            let p1_acquire = p1_acquire.clone();
             move || {
-                let _guard_b = mu_b.acquire();
-                std::thread::sleep(std::time::Duration::from_millis(500));
+                p0_first.wait(); // (1)
+                let _guard_b = mu_b.acquire(); // (3)
+                println!("p1 acquires");
+                p1_acquire.wait();
+                p1_release.wait();
+                println!("p1 releasing");
             }
         });
-        std::thread::sleep(std::time::Duration::from_millis(500));
-        assert!(!th_b.is_finished());
-
-        // A release and acquire, then blocks so that B doesn't starve
-        drop(_guard_a);
-        let th_a = std::thread::spawn({
-            move || {
-                let _guard_a = mu_a.acquire();
-                std::thread::sleep(std::time::Duration::from_millis(500));
-            }
-        });
-
-        // B done, A still blocking
-        th_b.join().unwrap();
-        assert!(!th_a.is_finished());
-        th_a.join().unwrap();
+        p0_first.wait(); // (1)
+        for _ in 0..5 {
+            // let p1 block
+            std::thread::yield_now();
+        }
+        p0_release.wait(); // (2)
+        p1_acquire.wait(); // (3)
+        std::thread::yield_now(); // (4)
+        assert!(!th0.is_finished());
+        assert!(!th1.is_finished());
+        p1_release.wait();
+        th1.join().unwrap(); // (5)
+        std::thread::yield_now();
+        assert!(!th0.is_finished());
+        p0_reacquire.wait();
     }
 
     #[derive(Default)]
