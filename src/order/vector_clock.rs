@@ -1,5 +1,26 @@
 use super::LogicalClock;
 
+/// Vector Clock is used to compare if one event happens before (<) / after (>) another or if they are concurrent (None).
+///
+/// More precisely, events `s < t` if and only if s happens before t. This can be a result of program order (extend),
+/// send-receive order on a unidirectional FIFO channel (merge) or transitivity of this relation.
+///
+/// # Examples
+/// ```
+/// use algo::order::LogicalClock;
+/// use algo::order::vector_clock::VectorClock;
+///
+/// let e1 = VectorClock::new(0, 2);
+/// assert!(e1 == e1);
+/// let e2 = e1.extend();
+/// assert!(e1 < e2);
+/// let f1 = VectorClock::new(1, 2);
+/// assert!(e1.partial_cmp(&f1) == None);
+/// let f2 = f1.merge(&e1);
+/// assert!(e1 < f2);
+/// assert!(e2.partial_cmp(&f2) == None);
+/// assert!(f1 < f2);
+/// ```
 #[derive(Clone)]
 pub struct VectorClock {
     i: usize,
@@ -28,12 +49,20 @@ impl LogicalClock for VectorClock {
             other.clk.len(),
             "Cannot merge with process that is aware of differing processes"
         );
-        let mut e = self.clone();
-        for (s, t) in e.clk.iter_mut().zip(&other.clk) {
-            *s = (*s).max(*t);
+        assert!(
+            self.clk[self.i] >= other.clk[self.i],
+            "Process from different scheduler detected. Process' own clock's invariant broken."
+        );
+        Self {
+            i: self.i,
+            clk: self
+                .clk
+                .iter()
+                .zip(&other.clk)
+                .enumerate()
+                .map(|(i, (s, t))| if i == self.i { *s + 1 } else { *s.max(t) })
+                .collect(),
         }
-        e.clk[e.i] += 1;
-        e
     }
 }
 
