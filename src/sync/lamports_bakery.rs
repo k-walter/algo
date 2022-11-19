@@ -1,20 +1,14 @@
-use super::Mutex;
+use super::NoStarveMutex;
+use crate::sync::WantGuard;
 use std::sync::atomic::Ordering;
 
 /// N-ary mutex to protect critical section fairly.
 ///
-/// 1. Mutual Exclusion - spinlocks on shared variables in the mutex to guarantee only one BakeryN enters.
-/// It is UB for the same BakeryN to `acquire()` multiple times without `release()`.
-/// 2. No Starvation - assuming OS threads eventually runs, BakeryN can never cause BakeryM (N!=M) to fail to `acquire()`
-/// regardless of `acquire()` order.
-///
 /// # Examples
 /// ```
 /// use crate::algo::sync::lamports_bakery::{Bakery, BakeryN};
-/// use crate::algo::sync::Mutex;
-/// use std::sync::{
-///     atomic::Ordering,
-/// };
+/// use std::sync::atomic::Ordering;
+/// use algo::sync::NoStarveMutex;
 ///
 /// let data = std::sync::Arc::new(std::sync::atomic::AtomicI32::new(0));
 /// let mu = std::sync::Arc::new(Bakery::new(4));
@@ -25,7 +19,7 @@ use std::sync::atomic::Ordering;
 ///         let n = n as i32 + 1;
 ///         std::thread::spawn(move || {
 ///             for _ in 0..10_000 {
-///                 let _guard = mu.acquire();
+///                 let _guard = mu.lock();
 ///                 let i = data.load(Ordering::Relaxed);
 ///                 data.store(i + n, Ordering::Relaxed);
 ///             }
@@ -55,6 +49,7 @@ pub struct BakeryN {
     n: usize,
     bakery: std::sync::Arc<Bakery>,
 }
+pub struct BakeryWant<'a>(Option<&'a BakeryN>);
 pub struct BakeryGuard<'a>(&'a BakeryN);
 impl BakeryN {
     // Does not check if index is taken.
@@ -67,8 +62,8 @@ impl BakeryN {
         }
     }
 }
-impl<'a> Mutex<'a, BakeryGuard<'a>> for BakeryN {
-    fn acquire(&'a mut self) -> BakeryGuard<'a> {
+impl<'a> NoStarveMutex<'a, BakeryGuard<'a>, BakeryWant<'a>> for BakeryN {
+    fn want_lock(&'a mut self) -> BakeryWant<'a> {
         // Optimization: entering the queue is -1, which is fine since -1 < all +ve queue numbers
         self.bakery.q_nos[self.n].store(Bakery::ENTER, Ordering::SeqCst);
         let q_no = 1 + self
@@ -77,18 +72,32 @@ impl<'a> Mutex<'a, BakeryGuard<'a>> for BakeryN {
             .iter()
             .fold(0, |acc, i| i.load(Ordering::SeqCst).max(acc));
         self.bakery.q_nos[self.n].store(q_no, Ordering::SeqCst);
+        BakeryWant(Some(self))
+    }
+}
 
-        for (i, other_q_no) in self.bakery.q_nos.iter().enumerate() {
+impl<'a> WantGuard<'a, BakeryGuard<'a>> for BakeryWant<'a> {
+    fn wait(mut self) -> BakeryGuard<'a> {
+        let b = self.0.take().unwrap();
+        let q_no = b.bakery.q_nos[b.n].load(Ordering::SeqCst);
+        for (i, other_q_no) in b.bakery.q_nos.iter().enumerate() {
             while other_q_no.load(Ordering::SeqCst) != Bakery::FREE
-                && (other_q_no.load(Ordering::SeqCst), i) < (q_no, self.n)
+                && (other_q_no.load(Ordering::SeqCst), i) < (q_no, b.n)
             {
                 std::thread::yield_now();
             }
         }
-
-        BakeryGuard(self)
+        BakeryGuard(b)
     }
 }
+impl<'a> Drop for BakeryWant<'a> {
+    fn drop(&mut self) {
+        if let Some(b) = self.0 {
+            BakeryGuard(b); // reuse drop logic
+        }
+    }
+}
+
 impl Drop for BakeryGuard<'_> {
     fn drop(&mut self) {
         self.0.bakery.q_nos[self.0.n].store(Bakery::FREE, Ordering::SeqCst);
@@ -99,7 +108,7 @@ impl Drop for BakeryGuard<'_> {
 mod tests {
     use crate::sync::{
         lamports_bakery::{Bakery, BakeryN},
-        Mutex,
+        NoStarveMutex, WantGuard,
     };
     use std::sync::atomic::Ordering;
     const N_THREADS: i32 = 4;
@@ -155,7 +164,7 @@ mod tests {
                 let mut mu = BakeryN::new(n, &mu);
                 std::thread::spawn(move || {
                     for _ in 0..WORK {
-                        let _guard = mu.acquire();
+                        let _guard = mu.lock();
                         if n % 2 == 0 {
                             data.add_then_sub();
                         } else {
@@ -172,54 +181,53 @@ mod tests {
 
     #[test]
     fn no_starvation() {
-        let mu = std::sync::Arc::new(Bakery::new(2));
-        // 1. Let p0 acquire first, then p1 blocks
-        let p0_first = std::sync::Arc::new(std::sync::Barrier::new(3));
-        // 2. p0 release and immediately acquires but blocks to p1 who's waiting
+        let mut mu = std::sync::Arc::new(Bakery::new(2));
+        // 1. Let p0 locks first, then p1 wants and blocks
+        let p0_first = std::sync::Arc::new(std::sync::Barrier::new(2));
+        let p1_wants = std::sync::Arc::new(std::sync::Barrier::new(2));
+        // 2. p0 release and immediately locks but blocks to p1 who's waiting
         let p0_release = std::sync::Arc::new(std::sync::Barrier::new(2));
-        // 3. p1 wakes up and acquires the mutex, ie no starvation
+        // 3. p1 wakes up and locks the mutex, ie no starvation
         let p1_acquire = std::sync::Arc::new(std::sync::Barrier::new(2));
-        // 4. p1 releases, allowing p0 to acquire
+        // 4. p1 releases, allowing p0 to lock
         let p1_release = std::sync::Arc::new(std::sync::Barrier::new(2));
-        // 5. p0 wakes up and acquires the mutex
+        // 5. p0 wakes up and locks the mutex
         let p0_reacquire = std::sync::Arc::new(std::sync::Barrier::new(2));
 
         let th0 = {
-            let mut mu = BakeryN::new(0, &mu);
+            let mut mu_a = BakeryN::new(0, &mu);
             let p0_first = p0_first.clone();
             let p0_release = p0_release.clone();
             let p0_reacquire = p0_reacquire.clone();
             std::thread::spawn(move || {
-                let _guard = mu.acquire();
+                let _guard = mu_a.lock();
                 println!("p0 first");
                 p0_first.wait(); // (1)
                 p0_release.wait(); // (2)
                 println!("p0 releasing");
                 drop(_guard);
-                let _guard = mu.acquire(); // (4)
+                let _guard = mu_a.lock(); // (4)
                 println!("p0 reacquire");
                 p0_reacquire.wait(); // (5)
             })
         };
         let th1 = std::thread::spawn({
-            let mut mu = BakeryN::new(1, &mu);
-            let p0_first = p0_first.clone();
+            let mut mu_b = BakeryN::new(1, &mu);
+            let p1_wants = p1_wants.clone();
             let p1_release = p1_release.clone();
             let p1_acquire = p1_acquire.clone();
             move || {
                 p0_first.wait(); // (1)
-                let _guard_b = mu.acquire(); // (3)
+                let mut _want = mu_b.want_lock();
+                p1_wants.wait();
+                let _guard = _want.wait(); // (3)
                 println!("p1 acquires");
                 p1_acquire.wait();
                 p1_release.wait();
                 println!("p1 releasing");
             }
         });
-        p0_first.wait(); // (1)
-        for _ in 0..5 {
-            // let p1 block
-            std::thread::yield_now();
-        }
+        p1_wants.wait(); // (1)
         p0_release.wait(); // (2)
         p1_acquire.wait(); // (3)
         std::thread::yield_now(); // (4)
