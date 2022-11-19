@@ -1,7 +1,7 @@
 pub mod lamports_bakery;
 pub mod peterson;
 
-/// Starvation Free Mutex allows for realtime or bounded wait.
+/// Starvation Free Mutex allows for realtime / bounded wait for a critical section.
 ///
 /// The requirements for that are
 /// 1. Mutual Exclusion - spinlocks on shared variables in the mutex to guarantee only one enters the critical section.
@@ -13,10 +13,14 @@ where
     Guard: Drop,
     Want: WantGuard<'a, Guard>,
 {
+    // Convenience function to register and wait for the lock.
     // &mut guarantees no double acquire within the same scope, at compile time
     fn lock(&'a mut self) -> Guard {
         self.want_lock().wait()
     }
+
+    // Indicates you want to lock. You can only be sure you have the lock after `wait()`ing on the `WantGuard`.
+    // Holding the `WantGuard` blocks other threads from reacquiring the lock so that you do not starve.
     fn want_lock(&'a mut self) -> Want;
 }
 

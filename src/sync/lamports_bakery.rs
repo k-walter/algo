@@ -181,7 +181,7 @@ mod tests {
 
     #[test]
     fn no_starvation() {
-        let mut mu = std::sync::Arc::new(Bakery::new(2));
+        let mu = std::sync::Arc::new(Bakery::new(2));
         // 1. Let p0 locks first, then p1 wants and blocks
         let p0_first = std::sync::Arc::new(std::sync::Barrier::new(2));
         let p1_wants = std::sync::Arc::new(std::sync::Barrier::new(2));
