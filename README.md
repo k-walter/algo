@@ -5,9 +5,8 @@ My goal is to
 - Practice TDD
 
 ### Synchronization
-Just to be clear, you should use rust's synchronization primitives. The implementation of these algorithms require
-your platform's atomic support.
-- [x] [Mutex Trait](src/sync/mod.rs)
+The implementation of these algorithms require your platform's atomic support.
+- [x] [NoStarveMutex Trait](src/sync/mod.rs) to lock in a bounded time (i.e. realtime)
 - [x] [Peterson's Algorithm](src/sync/peterson.rs) for starvation-free binary mutual exclusion
 - [x] [Lamport's Bakery](src/sync/lamports_bakery.rs) for starvation-free n-ary mutual exclusion (with `O(n)` time and space)
 
@@ -15,7 +14,6 @@ your platform's atomic support.
 ### CS4231 Parallel & Distributed Algorithms
 #### Causal Ordering
 - [x] [Logical Clock Trait](src/order/mod.rs)
-- [x] ~~Lamport's Logical Clock~~ not meaningful
 - [x] [Vector Clock](src/order/vector_clock.rs) to compare if event s "happens before" event t
 - [ ] Matrix Clock
 - [ ] Chandy & Lamport's Protocol (Consistent Global Snapshot) 
@@ -43,3 +41,9 @@ Byzantine Failure, Reliable Channel, Synchronous
 
 ### CS3223
 ### CS4224
+
+### Hash Tables
+- [ ] Cuckoo Hashing
+- [ ] Robin Hood Hashing
+- [ ] Sliding Bloom Filter
+- [ ] https://programming.guide/hash-tables.html

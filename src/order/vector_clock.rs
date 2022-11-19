@@ -23,8 +23,9 @@ impl LogicalClock for VectorClock {
         e
     }
     fn merge(&self, other: &Self) -> Self {
-        assert!(
-            self.clk.len() == other.clk.len(),
+        assert_eq!(
+            self.clk.len(),
+            other.clk.len(),
             "Cannot merge with process that is aware of differing processes"
         );
         let mut e = self.clone();
