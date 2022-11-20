@@ -1,5 +1,5 @@
-# Algorithms in Rust
-My goal is to
+# Rust Algorithms And Data Structures
+Goals
 - Implement some cool (mostly parallel) algorithms and data structures
 - Learn rust
 - Practice TDD
@@ -17,7 +17,8 @@ The implementation of these algorithms require your platform's atomic support.
 - [x] [Vector Clock](src/order/vector_clock.rs) to compare if event s "happens before" event t
 - [ ] Matrix Clock
 - [ ] Chandy & Lamport's Protocol (Consistent Global Snapshot) 
-- [ ] Causal Order Unicast
+- [ ] Causal Order Delivery
+- [ ] Skeen's Algorithm (Total Order Broadcast)
 
 #### Distributed Consensus
 No node/link failure

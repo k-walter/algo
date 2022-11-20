@@ -5,9 +5,9 @@ use std::sync::atomic::Ordering;
 ///
 /// # Examples
 /// ```
-/// use crate::algo::sync::peterson::Peterson;
+/// use crate::rads::sync::peterson::Peterson;
 /// use std::sync::atomic::Ordering;
-/// use algo::sync::NoStarveMutex;
+/// use rads::sync::NoStarveMutex;
 ///
 /// let (mut mu_a, mut mu_b) = Peterson::binary_mutex();
 /// let mut val = std::sync::Arc::new(std::sync::atomic::AtomicI32::new(0));

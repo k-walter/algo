@@ -7,8 +7,8 @@ use super::LogicalClock;
 ///
 /// # Examples
 /// ```
-/// use algo::order::LogicalClock;
-/// use algo::order::vector_clock::VectorClock;
+/// use rads::order::LogicalClock;
+/// use rads::order::vector_clock::VectorClock;
 ///
 /// let e1 = VectorClock::new(0, 2);
 /// assert!(e1 == e1);

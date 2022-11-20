@@ -6,9 +6,9 @@ use std::sync::atomic::Ordering;
 ///
 /// # Examples
 /// ```
-/// use crate::algo::sync::lamports_bakery::{Bakery, BakeryN};
+/// use crate::rads::sync::lamports_bakery::{Bakery, BakeryN};
 /// use std::sync::atomic::Ordering;
-/// use algo::sync::NoStarveMutex;
+/// use rads::sync::NoStarveMutex;
 ///
 /// let data = std::sync::Arc::new(std::sync::atomic::AtomicI32::new(0));
 /// let mu = std::sync::Arc::new(Bakery::new(4));
