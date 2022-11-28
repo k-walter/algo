@@ -1,4 +1,5 @@
 use super::LogicalClock;
+use crate::order::{HasEvents, OrdProcess};
 
 /// Vector Clock is used to compare if one event happens before (<) / after (>) another or if they are concurrent (None).
 ///
@@ -44,12 +45,12 @@ impl LogicalClock for VectorClock {
         e
     }
     fn merge(&self, other: &Self) -> Self {
-        assert_eq!(
+        debug_assert_eq!(
             self.clk.len(),
             other.clk.len(),
             "Cannot merge with process that is aware of differing processes"
         );
-        assert!(
+        debug_assert!(
             self.clk[self.i] >= other.clk[self.i],
             "Process from different scheduler detected. Process' own clock's invariant broken."
         );
@@ -90,9 +91,34 @@ impl PartialEq for VectorClock {
     }
 }
 
+struct VecProcess {
+    events: Vec<VectorClock>,
+}
+
+impl VecProcess {
+    pub fn new(i: usize, n_procs: usize) -> Self {
+        Self {
+            events: Vec::from([VectorClock::new(i, n_procs)]),
+        }
+    }
+}
+
+impl HasEvents<VectorClock> for VecProcess {
+    fn events(&self) -> &[VectorClock] {
+        &self.events
+    }
+
+    fn events_mut(&mut self) -> &mut Vec<VectorClock> {
+        &mut self.events
+    }
+}
+
+impl OrdProcess<VectorClock> for VecProcess {}
+
 #[cfg(test)]
 mod tests {
-    use crate::order::{vector_clock::VectorClock, LogicalClock, Process};
+    use crate::order::vector_clock::VecProcess;
+    use crate::order::{vector_clock::VectorClock, HasEvents, LogicalClock, OrdProcess};
     use rand::Rng;
 
     #[test]
@@ -127,14 +153,14 @@ mod tests {
         let (tx3, rx3) = std::sync::mpsc::channel::<VectorClock>();
 
         let th1 = std::thread::spawn(move || {
-            let mut p = Process::new(0, 3);
+            let mut p = VecProcess::new(0, 3);
             p.exec(rand_timeout);
             p.send(|e| tx1_2.send(e).unwrap());
             p.exec(rand_timeout);
             p
         });
         let th2 = std::thread::spawn(move || {
-            let mut p = Process::new(1, 3);
+            let mut p = VecProcess::new(1, 3);
             p.exec(rand_timeout);
             p.recv(|| rx3_2.recv().unwrap());
             p.recv(|| rx1_2.recv().unwrap());
@@ -142,7 +168,7 @@ mod tests {
             p
         });
         let th3 = std::thread::spawn(move || {
-            let mut p = Process::new(2, 3);
+            let mut p = VecProcess::new(2, 3);
             p.exec(rand_timeout);
             p.send(|e| tx3_2.send(e).unwrap());
             p.exec(rand_timeout);
