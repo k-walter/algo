@@ -8,6 +8,10 @@ pub trait LogicalClock: PartialOrd + Clone {
     fn merge(&self, other: &Self) -> Self;
 }
 
+pub trait GCClock: LogicalClock {
+    fn gc(i: usize, clk: &Self) -> bool;
+}
+
 pub trait HasEvents<Event: LogicalClock> {
     fn events(&self) -> &[Event];
     fn events_mut(&mut self) -> &mut Vec<Event>;
