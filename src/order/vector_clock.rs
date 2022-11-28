@@ -91,34 +91,47 @@ impl PartialEq for VectorClock {
     }
 }
 
-struct VecProcess {
+pub struct VecProcess {
+    i: usize,
+    n_procs: usize,
     events: Vec<VectorClock>,
 }
 
 impl VecProcess {
     pub fn new(i: usize, n_procs: usize) -> Self {
         Self {
-            events: Vec::from([VectorClock::new(i, n_procs)]),
+            i,
+            n_procs,
+            events: Vec::new(),
         }
     }
 }
 
 impl HasEvents<VectorClock> for VecProcess {
-    fn events(&self) -> &[VectorClock] {
-        &self.events
+    fn last_event(&self) -> Option<&VectorClock> {
+        self.events.last()
     }
-
-    fn events_mut(&mut self) -> &mut Vec<VectorClock> {
-        &mut self.events
+    fn push_event(&mut self, e: VectorClock) {
+        self.events.push(e)
+    }
+    fn pid(&self) -> usize {
+        self.i
+    }
+    fn n_procs(&self) -> usize {
+        self.n_procs
     }
 }
 
-impl OrdProcess<VectorClock> for VecProcess {}
+impl OrdProcess<VectorClock> for VecProcess {
+    fn snapshot(&self) -> &[VectorClock] {
+        self.events.as_slice()
+    }
+}
 
 #[cfg(test)]
 mod tests {
     use crate::order::vector_clock::VecProcess;
-    use crate::order::{vector_clock::VectorClock, HasEvents, LogicalClock, OrdProcess};
+    use crate::order::{vector_clock::VectorClock, LogicalClock, OrdProcess};
     use rand::Rng;
 
     #[test]
@@ -176,9 +189,12 @@ mod tests {
             p
         });
 
-        let p1 = th1.join().unwrap().snapshot();
-        let p2 = th2.join().unwrap().snapshot();
-        let p3 = th3.join().unwrap().snapshot();
+        let p1 = th1.join().unwrap();
+        let p2 = th2.join().unwrap();
+        let p3 = th3.join().unwrap();
+        let p1 = p1.snapshot();
+        let p2 = p2.snapshot();
+        let p3 = p3.snapshot();
 
         // Number of events
         assert_eq!(p1.len(), 3);
