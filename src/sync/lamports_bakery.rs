@@ -253,12 +253,14 @@ mod tests {
         fn add_then_sub(&self) {
             let i = self.0.load(Ordering::Relaxed);
             let d = self.1.load(Ordering::Relaxed);
+            std::thread::yield_now();
             self.0.store(i + 1, Ordering::Relaxed);
             self.1.store(d - 1, Ordering::Relaxed);
         }
         fn sub_then_add(&self) {
             let d = self.1.load(Ordering::Relaxed);
             let i = self.0.load(Ordering::Relaxed);
+            std::thread::yield_now();
             self.1.store(d - 1, Ordering::Relaxed);
             self.0.store(i + 1, Ordering::Relaxed);
         }
