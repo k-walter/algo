@@ -160,4 +160,29 @@ mod tests {
         assert_eq!(gc.len(), n_events + 1, "Got {gc:?}");
         assert_eq!(ps[0].snapshot().len(), 1); // recv event only
     }
+
+    #[test]
+    fn partial_ord() {
+        let e1 = MatrixClock::new(0, 2);
+        assert_eq!(e1.partial_cmp(&e1), Some(std::cmp::Ordering::Equal));
+        let e2 = e1.extend();
+        assert_eq!(e1.partial_cmp(&e2), Some(std::cmp::Ordering::Less));
+        assert_eq!(e2.partial_cmp(&e1), Some(std::cmp::Ordering::Greater));
+        assert_eq!(e2.partial_cmp(&e2), Some(std::cmp::Ordering::Equal));
+
+        let f1 = MatrixClock::new(1, 2);
+        assert_eq!(e1.partial_cmp(&f1), None);
+        assert_eq!(e2.partial_cmp(&f1), None);
+        assert_eq!(f1.partial_cmp(&e1), None);
+        assert_eq!(f1.partial_cmp(&e2), None);
+        assert_eq!(f1.partial_cmp(&f1), Some(std::cmp::Ordering::Equal));
+        let f2 = f1.merge(&e1);
+        assert_eq!(e1.partial_cmp(&f2), Some(std::cmp::Ordering::Less));
+        assert_eq!(e2.partial_cmp(&f2), None);
+        assert_eq!(f1.partial_cmp(&f2), Some(std::cmp::Ordering::Less));
+        assert_eq!(f2.partial_cmp(&e1), Some(std::cmp::Ordering::Greater));
+        assert_eq!(f2.partial_cmp(&e2), None);
+        assert_eq!(f2.partial_cmp(&f1), Some(std::cmp::Ordering::Greater));
+        assert_eq!(f2.partial_cmp(&f2), Some(std::cmp::Ordering::Equal));
+    }
 }
