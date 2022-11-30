@@ -1,5 +1,5 @@
 use super::LogicalClock;
-use crate::order::{HasEvents, OrdProcess};
+use crate::order::{pairwise_max, HasEvents, OrdProcess};
 
 /// Vector Clock is used to compare if one event happens before (<) / after (>) another or if they are concurrent (None).
 ///
@@ -56,12 +56,9 @@ impl LogicalClock for VectorClock {
         );
         Self {
             i: self.i,
-            clk: self
-                .clk
-                .iter()
-                .zip(&other.clk)
+            clk: pairwise_max(self.clk.iter(), other.clk.iter())
                 .enumerate()
-                .map(|(i, (s, t))| if i == self.i { *s + 1 } else { *s.max(t) })
+                .map(|(i, v)| v + usize::from(i == self.i))
                 .collect(),
         }
     }

@@ -53,3 +53,11 @@ where
     // Snapshot of event clocks occurred on process
     fn snapshot(&self) -> &[Event];
 }
+
+// Helper function
+fn pairwise_max<'a, I>(a: I, b: I) -> impl Iterator<Item = usize> + 'a
+where
+    I: Iterator<Item = &'a usize> + 'a,
+{
+    a.zip(b).map(|(i, j)| *i.max(j))
+}
