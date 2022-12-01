@@ -64,13 +64,26 @@ impl LogicalClock for MatrixClock {
 
 impl PartialOrd for MatrixClock {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        todo!()
+        if self.clk.len() != other.clk.len() {
+            return None;
+        }
+        use std::cmp::Ordering::{Equal, Greater, Less};
+        self.clk
+            .iter()
+            .flatten()
+            .zip(other.clk.iter().flatten())
+            .try_fold(Equal, |acc, (s, t)| match (acc, s.cmp(t)) {
+                (Less, Greater) | (Greater, Less) => None,
+                (_, Less) | (Less, _) => Some(Less),
+                (_, Greater) | (Greater, _) => Some(Greater),
+                (Equal, Equal) => Some(Equal),
+            })
     }
 }
 
 impl PartialEq<Self> for MatrixClock {
     fn eq(&self, other: &Self) -> bool {
-        todo!()
+        self.clk == other.clk
     }
 }
 
