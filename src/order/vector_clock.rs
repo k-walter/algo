@@ -84,7 +84,7 @@ impl PartialOrd for VectorClock {
 
 impl PartialEq for VectorClock {
     fn eq(&self, other: &Self) -> bool {
-        self.clk == other.clk
+        self.i == other.i && self.clk == other.clk
     }
 }
 
