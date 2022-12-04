@@ -1,5 +1,5 @@
 use super::LogicalClock;
-use crate::order::{pairwise_max, HasEvents, OrdProcess};
+use crate::order::{pairwise_max, CausalOrd, HasEvents, OrdProcess};
 
 /// Vector Clock is used to compare if one event happens before (<) / after (>) another or if they are concurrent (None).
 ///
@@ -82,6 +82,8 @@ impl PartialOrd for VectorClock {
     }
 }
 
+impl CausalOrd for VectorClock {}
+
 impl PartialEq for VectorClock {
     fn eq(&self, other: &Self) -> bool {
         self.i == other.i && self.clk == other.clk
@@ -117,18 +119,17 @@ impl HasEvents<VectorClock> for VecProcess {
     fn n_procs(&self) -> usize {
         self.n_procs
     }
-}
-
-impl OrdProcess<VectorClock> for VecProcess {
-    fn snapshot(&self) -> &[VectorClock] {
+    fn events(&self) -> &[VectorClock] {
         self.events.as_slice()
     }
 }
 
+impl OrdProcess<VectorClock> for VecProcess {}
+
 #[cfg(test)]
 mod tests {
     use crate::order::vector_clock::VecProcess;
-    use crate::order::{vector_clock::VectorClock, LogicalClock, OrdProcess};
+    use crate::order::{vector_clock::VectorClock, HasEvents, LogicalClock, OrdProcess};
     use rand::Rng;
 
     #[test]
@@ -189,9 +190,9 @@ mod tests {
         let p1 = th1.join().unwrap();
         let p2 = th2.join().unwrap();
         let p3 = th3.join().unwrap();
-        let p1 = p1.snapshot();
-        let p2 = p2.snapshot();
-        let p3 = p3.snapshot();
+        let p1 = p1.events();
+        let p2 = p2.events();
+        let p3 = p3.events();
 
         // Number of events
         assert_eq!(p1.len(), 3);

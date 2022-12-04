@@ -2,7 +2,9 @@ pub mod matrix_clock;
 pub mod vector_clock;
 
 // PartialOrd because not all clocks are comparable
-pub trait LogicalClock: PartialOrd + Clone {
+pub trait CausalOrd: PartialOrd {}
+
+pub trait LogicalClock: Clone {
     fn new(i: usize, n_procs: usize) -> Self;
     fn extend(&self) -> Self;
     fn merge(&self, other: &Self) -> Self;
@@ -17,6 +19,7 @@ pub trait HasEvents<Event: LogicalClock> {
     fn push_event(&mut self, e: Event);
     fn pid(&self) -> usize;
     fn n_procs(&self) -> usize;
+    fn events(&self) -> &[Event];
 }
 
 pub trait OrdProcess<Event>: HasEvents<Event>
@@ -50,8 +53,6 @@ where
             .merge(&e_recv);
         self.push_event(e);
     }
-    // Snapshot of event clocks occurred on process
-    fn snapshot(&self) -> &[Event];
 }
 
 // Helper function

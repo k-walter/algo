@@ -1,4 +1,4 @@
-use crate::order::{pairwise_max, GCClock, HasEvents, LogicalClock, OrdProcess};
+use crate::order::{pairwise_max, CausalOrd, GCClock, HasEvents, LogicalClock, OrdProcess};
 use std::cmp::Ordering;
 use std::collections::VecDeque;
 
@@ -62,6 +62,8 @@ impl LogicalClock for MatrixClock {
     }
 }
 
+impl CausalOrd for MatrixClock {}
+
 impl PartialOrd for MatrixClock {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         if self.clk.len() != other.clk.len() {
@@ -110,12 +112,7 @@ impl GCProcess {
     }
 }
 
-impl OrdProcess<MatrixClock> for GCProcess {
-    fn snapshot(&self) -> &[MatrixClock] {
-        let (front, _back) = self.events.as_slices();
-        front
-    }
-}
+impl OrdProcess<MatrixClock> for GCProcess {}
 
 impl HasEvents<MatrixClock> for GCProcess {
     fn last_event(&self) -> Option<&MatrixClock> {
@@ -130,12 +127,16 @@ impl HasEvents<MatrixClock> for GCProcess {
     fn n_procs(&self) -> usize {
         self.n_procs
     }
+    fn events(&self) -> &[MatrixClock] {
+        let (front, _back) = self.events.as_slices();
+        front
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use crate::order::matrix_clock::{GCProcess, MatrixClock};
-    use crate::order::{LogicalClock, OrdProcess};
+    use crate::order::{HasEvents, LogicalClock, OrdProcess};
     use rand::Rng;
 
     #[test]
@@ -150,7 +151,7 @@ mod tests {
             ps[0].exec(|| {});
         }
         assert_eq!(ps[0].gc(), vec![]);
-        assert_eq!(ps[0].snapshot().len(), n_events);
+        assert_eq!(ps[0].events().len(), n_events);
 
         // Send from 0->1->2->...->n-1
         for (i, j) in (0..).zip(1..n_procs) {
@@ -160,7 +161,7 @@ mod tests {
             });
             ps[j].recv(|| e.unwrap());
             assert_eq!(ps[0].gc(), vec![]);
-            assert_eq!(ps[0].snapshot().len(), n_events + 1); // + send event
+            assert_eq!(ps[0].events().len(), n_events + 1); // + send event
         }
 
         // Send from n-1->0, can GC n_events + send event
@@ -171,7 +172,7 @@ mod tests {
         ps[0].recv(|| e.unwrap());
         let gc = ps[0].gc();
         assert_eq!(gc.len(), n_events + 1, "Got {gc:?}");
-        assert_eq!(ps[0].snapshot().len(), 1); // recv event only
+        assert_eq!(ps[0].events().len(), 1); // recv event only
     }
 
     #[test]
