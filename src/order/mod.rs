@@ -1,3 +1,4 @@
+pub mod chandy_lamport;
 pub mod matrix_clock;
 pub mod vector_clock;
 
@@ -36,6 +37,7 @@ where
         f();
     }
     // Sends new clock to receiving party
+    // Expects a function that sends clock to receiving processes in a lossless FIFO channel
     fn send<F: FnOnce(Event)>(&mut self, send_fn: F) {
         let e = self
             .last_event()
@@ -45,6 +47,7 @@ where
         send_fn(e);
     }
     // Receives clock from sending party and updates own clock
+    // Expects a function that receives clocks from any other process in a lossless FIFO channel
     fn recv<F: FnOnce() -> Event>(&mut self, recv_fn: F) {
         let e_recv = recv_fn();
         let e = self
