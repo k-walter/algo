@@ -63,3 +63,4 @@ GC by knowing if all processes have seen clock
 - [ ] Hopscotch Hashing
 - [ ] Sliding Bloom Filter
 - [ ] https://programming.guide/hash-tables.html
+- [ ] Skeleton rendezvous hash

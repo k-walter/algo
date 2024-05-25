@@ -1,21 +1,29 @@
 use crate::order::{HasEvents, LogicalClock, OrdProcess};
+use std::collections::HashMap;
 
-#[derive(Clone, Default)]
+#[derive(Clone, Hash, Eq, PartialEq)]
 pub struct ChandyLamportClock {
+    i: usize,
+    clk: usize,
     is_snapshot: bool,
 }
 impl LogicalClock for ChandyLamportClock {
-    fn new(i: usize, n_procs: usize) -> Self {
-        todo!()
+    fn new(i: usize, _n_procs: usize) -> Self {
+        Self {
+            i,
+            clk: 0,
+            is_snapshot: false,
+        }
     }
     fn extend(&self) -> Self {
-        Self::default()
+        Self {
+            i: self.i,
+            clk: self.clk + 1,
+            is_snapshot: false,
+        }
     }
-    fn merge(&self, other: &Self) -> Self {
-        // if other is snapshot
-        // if have not snapshot for origin
-        // snapshot
-        todo!()
+    fn merge(&self, _other: &Self) -> Self {
+        self.extend()
     }
 }
 
@@ -23,11 +31,14 @@ pub struct ChandyLamportProc {
     i: usize,
     n: usize,
     events: Vec<ChandyLamportClock>,
-    snapshots: Vec<usize>,
+    snapshots: HashMap<ChandyLamportClock, usize>,
 }
 impl ChandyLamportProc {
-    pub fn snapshots(&self) -> Vec<&[ChandyLamportClock]> {
-        self.snapshots.iter().map(|&i| &self.events[..i]).collect()
+    pub fn snapshots(&self) -> Vec<(ChandyLamportClock, &[ChandyLamportClock])> {
+        self.snapshots
+            .iter()
+            .map(|(k, v)| (k.clone(), &self.events[..*v]))
+            .collect()
     }
 }
 
@@ -37,12 +48,16 @@ impl ChandyLamportProc {
             i,
             n,
             events: Vec::new(),
-            snapshots: Vec::new(),
+            snapshots: HashMap::new(),
         }
     }
     // Expects to take a function that sends clock to all other processes in a lossless FIFO channel
-    pub fn global_snapshot<F: Fn(ChandyLamportClock)>(&self, f: F) {
-        todo!()
+    pub fn global_snapshot<F: Fn(ChandyLamportClock)>(&self, send_fn: F) {
+        let e = self
+            .last_event()
+            .unwrap_or(&ChandyLamportClock::new(self.i, self.n))
+            .clone();
+        send_fn(e);
     }
 }
 
@@ -64,7 +79,21 @@ impl HasEvents<ChandyLamportClock> for ChandyLamportProc {
     }
 }
 
-impl OrdProcess<ChandyLamportClock> for ChandyLamportProc {}
+impl OrdProcess<ChandyLamportClock> for ChandyLamportProc {
+    fn recv<F: FnOnce() -> ChandyLamportClock>(&mut self, recv_fn: F) {
+        let e_recv = recv_fn();
+        if !e_recv.is_snapshot {
+            let e = self
+                .last_event()
+                .unwrap_or(&ChandyLamportClock::new(self.pid(), self.n_procs()))
+                .merge(&e_recv);
+            self.push_event(e);
+        } else if let std::collections::hash_map::Entry::Vacant(e) = self.snapshots.entry(e_recv) {
+            e.insert(self.events.len());
+            // TODO broadcast to all
+        }
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -85,11 +114,11 @@ mod tests {
 
                 p.global_snapshot(|e| tx.iter().for_each(|tx| tx.send(e.clone()).unwrap())); // snapshots on start
                 assert_eq!(p.snapshots().len(), 1);
-                assert!(p.snapshots().last().unwrap().is_empty()); // hence snapshot is empty
+                assert!(p.snapshots().last().unwrap().1.is_empty()); // hence snapshot is empty
 
                 p.send(|e| tx[0].send(e).unwrap());
                 assert_eq!(p.snapshots().len(), 1); // no new snapshot
-                assert!(p.snapshots().last().unwrap().is_empty()); // old snapshot
+                assert!(p.snapshots().last().unwrap().1.is_empty()); // old snapshot
             }
         });
 
@@ -100,11 +129,11 @@ mod tests {
 
                 p.recv(|| rx2.recv().unwrap()); // should be snapshot
                 assert_eq!(p.snapshots().len(), 1);
-                assert_eq!(p.snapshots().last().unwrap().len(), 1); // immediately snapshot 1st recv
+                assert_eq!(p.snapshots().last().unwrap().1.len(), 1); // immediately snapshot 1st recv
 
                 p.recv(|| rx2.recv().unwrap()); // should be recv
                 assert_eq!(p.snapshots().len(), 1); // no new snapshot
-                assert_eq!(p.snapshots().last().unwrap().len(), 1); // old snapshot
+                assert_eq!(p.snapshots().last().unwrap().1.len(), 1); // old snapshot
             }
         });
 
